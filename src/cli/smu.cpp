@@ -4,6 +4,10 @@
 //   Kevin Mehall <km@kevinmehall.net>
 //   Ian Daniher <itdaniher@gmail.com>
 
+
+
+// Editted by Kerim Gokarslan <kerimgokarslan@gmail.com> for reading data at different frequencies between 1-100k
+#define MAX_FREQ 100000
 #include "libsmu.hpp"
 #include <stdlib.h>
 #include <iostream>
@@ -52,10 +56,13 @@ static void display_usage(void)
 		" -f, --flash <firmware image> flash firmware image to a single attached device\n");
 }
 
-static void stream_samples(Session* session)
+static void stream_samples(Session* session, int freq, int duration, char* file_name)
 {
+	static int time_counter = 0;
+	FILE* f_out = fopen(file_name, "w");
 	auto dev = *(session->m_devices.begin());
 	auto dev_info = dev->info();
+	printf("The scan will start immediately with following parameters\nFrequency: %d\nDuration(sec): %d\nOutput File: %s\n", freq, duration, file_name);
 	for (unsigned ch_i=0; ch_i < dev_info->channel_count; ch_i++) {
 		auto ch_info = dev->channel_info(ch_i);
 		dev->set_mode(ch_i, DISABLED);
@@ -63,14 +70,20 @@ static void stream_samples(Session* session)
 		for (unsigned sig_i=0; sig_i < ch_info->signal_count; sig_i++) {
 			auto sig = dev->signal(ch_i, sig_i);
 			auto sig_info = sig->info();
-            //printf("%s", no_argument);
-            exit(0);
 			sig->measure_callback([=](float d){
                 if(strcmp(ch_info->label, "A") == 0 && strcmp(sig_info->label, "Voltage") == 0){
                     counter ++;
-                    if(counter == 100000){
-                        printf("Channel %s, %s: %f\n", ch_info->label, sig_info->label, d);
+                    if(counter == MAX_FREQ/freq){
+                        //fprintf(f_out, "Channel %s, %s: %f\n", ch_info->label, sig_info->label, d);
+						fprintf(f_out, "%f\n",d);
                         counter = 0;
+						time_counter++;
+						if(time_counter >= duration * freq){// finish it
+							fclose(f_out);
+							printf("The operation is finished successfully. Please check the output file.\n");
+							exit(0);
+							
+						}
                     }
                 }
 			});
@@ -167,14 +180,14 @@ int main(int argc, char **argv)
 
 	// map long options to short ones
 	static struct option long_options[] = {
-		{"help",     no_argument, 0, 'a'},
-		{"hotplug",  no_argument, 0, 'p'},
-		{"list",     no_argument, 0, 'l'},
-		{"stream",   no_argument, 0, 's'},
-		{"display-calibration", no_argument, 0, 'd'},
-		{"reset-calibration", no_argument, 0, 'r'},
-		{"write-calibration", required_argument, 0, 'w'},
-		{"flash", required_argument, 0, 'f'},
+		{"help",     0, 0, 'a'},
+		{"hotplug",  0, 0, 'p'},
+		{"list",     0, 0, 'l'},
+		{"stream",   0, 0, 's'},
+		{"display-calibration", 0, 0, 'd'},
+		{"reset-calibration", 0, 0, 'r'},
+		{"write-calibration", 1, 0, 'w'},
+		{"flash", 1, 0, 'f'},
 		{0, 0, 0, 0}
 	};
 
@@ -207,9 +220,17 @@ int main(int argc, char **argv)
 				break;
 			case 's':
 				// stream samples from an attached device to stdout
-				if (!session->m_devices.empty()) {
-					stream_samples(session);
-				} else {
+				if (!session->m_devices.empty()){
+					if(argv[2] && argv[3] && argv[4]){
+						stream_samples(session, strtol(argv[2], NULL, 10),  strtol(argv[3], NULL, 10), argv[4]);
+						
+					}else{
+						cerr << "smu: bad arguments given. (use smu -s freq durationsec file)" << endl;
+						return EXIT_FAILURE;
+						
+					}
+					
+				}  else {
 					cerr << "smu: no supported devices plugged in" << endl;
 					return EXIT_FAILURE;
 				}
