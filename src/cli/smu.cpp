@@ -5,6 +5,7 @@
 //   Ian Daniher <itdaniher@gmail.com>
 
 #include "libsmu.hpp"
+#include <stdlib.h>
 #include <iostream>
 #include <cstdint>
 #include <vector>
@@ -58,11 +59,20 @@ static void stream_samples(Session* session)
 	for (unsigned ch_i=0; ch_i < dev_info->channel_count; ch_i++) {
 		auto ch_info = dev->channel_info(ch_i);
 		dev->set_mode(ch_i, DISABLED);
+        static int counter = 0;
 		for (unsigned sig_i=0; sig_i < ch_info->signal_count; sig_i++) {
 			auto sig = dev->signal(ch_i, sig_i);
 			auto sig_info = sig->info();
+            //printf("%s", no_argument);
+            exit(0);
 			sig->measure_callback([=](float d){
-				printf("Channel %s, %s: %f\n", ch_info->label, sig_info->label, d);
+                if(strcmp(ch_info->label, "A") == 0 && strcmp(sig_info->label, "Voltage") == 0){
+                    counter ++;
+                    if(counter == 100000){
+                        printf("Channel %s, %s: %f\n", ch_info->label, sig_info->label, d);
+                        counter = 0;
+                    }
+                }
 			});
 		}
 	}
